@@ -97,6 +97,25 @@ public class LoggerAIAutoConfiguration {
     }
 
     @Configuration(proxyBeanMethods = false)
+    @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.REACTIVE)
+    @ConditionalOnClass(name = "org.springframework.web.server.WebFilter")
+    static class Reactive {
+        @Bean
+        public uk.loggerai.reactive.LoggerAIWebFilter loggerAIWebFilter(LoggerAIStarter started) {
+            return new uk.loggerai.reactive.LoggerAIWebFilter();
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = "org.springframework.boot.web.reactive.function.client.WebClientCustomizer")
+    static class WebClients {
+        @Bean
+        public org.springframework.boot.web.reactive.function.client.WebClientCustomizer loggerAIWebClient() {
+            return b -> b.filter(new uk.loggerai.reactive.LoggerAIExchangeFilter());
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(DataSource.class)
     static class Jdbc {
         /** Wraps the app's DataSource so each query is timed. */

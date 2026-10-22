@@ -1,13 +1,13 @@
 # LoggerAI for Java
 
 Performance monitoring, errors, logs, health checks and server metrics for
-Spring Boot and any servlet app, with AI that explains what went wrong.
+Spring Boot (Spring MVC and WebFlux) and any servlet app, with AI that explains what went wrong.
 
 - **Every endpoint** timed under its route pattern (`/orders/{id}`):
   p50/p95/p99, Apdex, status codes, slow and failed requests.
 - **What each request waits on**: every JDBC query (so JPA and Hibernate too),
-  grouped as `mysql SELECT`, `postgres UPDATE`; calls made with `RestTemplate`
-  and `RestClient`.
+  grouped as `mysql SELECT`, `postgres UPDATE`; calls made with `RestTemplate`,
+  `RestClient` and `WebClient`.
 - **Exceptions**, grouped by cause, with stack traces that show your code
   first, including ones an `@ExceptionHandler` turned into a 5xx.
 - **Logs** at warning and above from SLF4J/Logback.
@@ -72,6 +72,20 @@ loggerai.environment=production
 # loggerai.host-metrics=false       # no CPU, memory and disk
 # loggerai.logs-level=ERROR         # or NONE
 # loggerai.app-packages=com.acme    # your code, for stack traces (default: your @SpringBootApplication's package)
+```
+
+## Spring WebFlux (reactive)
+
+Also automatic: every request is timed under its route pattern, `WebClient`
+calls are timed, and errors (including ones an `@ExceptionHandler` turns into
+a 5xx) are reported. A reactive request hops between threads, so it travels
+in the Reactor context; use the reactive helpers from your handlers:
+
+```java
+import uk.loggerai.reactive.ReactiveLoggerAI;
+
+return ReactiveLoggerAI.measure("api.stripe.com", "POST", stripe.confirm(id))   // a call LoggerAI can't see (R2DBC, reactive Mongo, an SDK)
+        .flatMap(pi -> ReactiveLoggerAI.setUser(user.getId()).thenReturn(pi));
 ```
 
 ## Other servlet apps (Jakarta EE, Quarkus on servlets, plain Tomcat or Jetty)
