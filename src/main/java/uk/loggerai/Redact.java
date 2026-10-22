@@ -24,17 +24,22 @@ public final class Redact {
     // ("accessToken" -> access, token; "X-CSRF-Token" -> x, csrf, token).
     private static final Set<String> WORDS = Set.of(
             "password", "passwd", "pwd", "pass", "passphrase", "secret", "token", "otp", "pin", "cvv", "cvc",
-            "ssn", "cookie", "authorization", "auth", "signature", "sig", "credential", "credentials", "bvn", "nin");
+            "ssn", "cookie", "authorization", "auth", "signature", "sig", "credential", "credentials", "bvn", "nin",
+            // where someone is: user_lat, userLng, pickup_latitude... (analytics never keep locations)
+            "lat", "lng", "lon", "latitude", "longitude", "coords", "coordinates", "geolocation", "gps");
     // ...or when its words run together into one of these ("x-api-key" -> xapikey).
     private static final List<String> JOINED = List.of(
             "apikey", "accesskey", "privatekey", "secretkey", "cardnumber", "clientsecret", "sessionid",
-            "authtoken", "accesstoken", "refreshtoken", "idtoken", "csrftoken", "xsrf", "setcookie");
+            "authtoken", "accesstoken", "refreshtoken", "idtoken", "csrftoken", "xsrf", "setcookie",
+            "latlng", "latlon", "lnglat", "lonlat", "geopoint");
     // Query parameters that carry credentials in URLs (e.g. Google's ?key=).
-    private static final Set<String> URL_EXTRA = Set.of("key", "code", "access_token", "id_token");
+    private static final Set<String> URL_EXTRA = Set.of("key", "code", "access_token", "id_token", "ll", "location"); // ?ll=6.52,3.37 (maps)
 
     private static final Pattern SPLIT = Pattern.compile("[^A-Za-z0-9]+|(?<=[a-z0-9])(?=[A-Z])");
     private static final Pattern JWT = Pattern.compile("eyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}");
     private static final Pattern BEARER = Pattern.compile("(?i)\\b(bearer|basic|token)\\s+[A-Za-z0-9\\-._~+/]{12,}=*");
+    // A latitude,longitude pair anywhere, e.g. in a path: /nearby/6.524379,3.379206
+    private static final Pattern COORDS = Pattern.compile("(?i)(?<![\\d.])-?\\d{1,3}\\.\\d{4,}\\s*(?:,|%2C)\\s*-?\\d{1,3}\\.\\d{4,}(?![\\d.])");
 
     private Redact() {}
 
@@ -55,6 +60,7 @@ public final class Redact {
     public static String string(String s) {
         if (s == null) return null;
         s = JWT.matcher(s).replaceAll("[REDACTED_JWT]");
+        s = COORDS.matcher(s).replaceAll("[REDACTED_LOCATION]");
         Matcher m = BEARER.matcher(s);
         StringBuilder sb = new StringBuilder();
         while (m.find()) m.appendReplacement(sb, Matcher.quoteReplacement(m.group(1) + " " + MASK));
