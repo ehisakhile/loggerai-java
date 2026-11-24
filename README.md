@@ -99,6 +99,28 @@ chain, and wrap your DataSource: `dataSource = LoggerAIDataSource.wrap(dataSourc
 For Logback, add `uk.loggerai.logback.LoggerAIAppender` to `logback.xml`.
 Without a framework that names routes, ids in the path become `{id}`.
 
+## Microservices
+
+Give each service its own name and use the same project key everywhere
+(`LOGGERAI_SERVICE=payments`). Calls between services then link up on their own:
+a request is one trace from the first service to the last, and LoggerAI's
+Service map shows which service calls which. The servlet and WebFlux filters
+continue the trace each request is called with (`traceparent`), and
+RestTemplate, RestClient and WebClient calls carry it on, with this service's
+name (`x-loggerai-caller`). Only the project's own services get them: hosts without a dot (Docker and Kubernetes service names), private addresses, and `.internal`, `.local` and `.svc.cluster.local` names. Outside APIs (Stripe, OpenAI) never do. If your services call each other by a public name, list it (`Options.propagate("api.acme.io,*.acme.io")`, or
+`LOGGERAI_PROPAGATE`; `all` or `none` also work).
+
+Queues: put the trace on the message, and pass it back when you handle it.
+
+```java
+var out = new ProducerRecord<>("orders", key, value);
+LoggerAI.traceHeaders("orders").forEach((k, v) -> out.headers().add(k, v.getBytes(UTF_8)));
+
+Map<String, String> h = new HashMap<>();
+record.headers().forEach(x -> h.put(x.key(), new String(x.value(), UTF_8)));
+LoggerAI.track("job", "order.created", h, () -> handle(record));
+```
+
 ## More
 
 ```java

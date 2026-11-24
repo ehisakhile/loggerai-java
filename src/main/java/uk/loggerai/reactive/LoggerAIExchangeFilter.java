@@ -1,5 +1,6 @@
 package uk.loggerai.reactive;
 
+import java.util.Map;
 import org.springframework.web.reactive.function.client.ClientRequest;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
@@ -8,8 +9,8 @@ import reactor.core.publisher.Mono;
 import uk.loggerai.Hooks;
 import uk.loggerai.Unit;
 
-/** Times calls made with WebClient, by host, for the request that made them.
- * Spring Boot adds it to every WebClient.Builder on its own. */
+/** Times calls made with WebClient, by host, for the request that made them, and carries the
+ * trace to the project's own services. Spring Boot adds it to every WebClient.Builder on its own. */
 public class LoggerAIExchangeFilter implements ExchangeFilterFunction {
     @Override
     public Mono<ClientResponse> filter(ClientRequest request, ExchangeFunction next) {
@@ -20,10 +21,19 @@ public class LoggerAIExchangeFilter implements ExchangeFilterFunction {
             Unit u = unit;
             String host = request.url().getHost() == null ? "unknown" : request.url().getHost();
             String method = request.method().name();
+            String sid = Hooks.newSpanId();
+            ClientRequest out = request;
+            Map<String, String> carry = request.headers().containsKey("traceparent") ? Map.of() : Hooks.carry(u, host, sid);
+            if (!carry.isEmpty()) {
+                out = ClientRequest.from(request).headers(h -> carry.forEach((k, v) -> {
+                    if (!h.containsKey(k)) h.set(k, v);
+                })).build();
+            }
             long t = System.nanoTime();
-            return next.exchange(request)
-                    .doOnSuccess(r -> Hooks.dependency(u, host, method, (System.nanoTime() - t) / 1e6, r == null || r.statusCode().value() < 500))
-                    .doOnError(e -> Hooks.dependency(u, host, method, (System.nanoTime() - t) / 1e6, false));
+            return next.exchange(out)
+                    .doOnSuccess(r -> Hooks.call(u, host, method, (System.nanoTime() - t) / 1e6, r == null || r.statusCode().value() < 500, sid,
+                            r == null ? 0 : r.statusCode().value()))
+                    .doOnError(e -> Hooks.call(u, host, method, (System.nanoTime() - t) / 1e6, false, sid, 0));
         });
     }
 }

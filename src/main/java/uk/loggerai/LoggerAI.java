@@ -18,7 +18,7 @@ import java.util.concurrent.Callable;
  * secrets are masked before anything leaves it.
  */
 public final class LoggerAI {
-    public static final String VERSION = "0.1.0";
+    public static final String VERSION = "0.2.0";
     private static volatile Client client;
     private static volatile boolean hooked;
 
@@ -94,10 +94,21 @@ public final class LoggerAI {
     /** Time a unit of work outside a web request: a scheduled task, a queue listener, a script.
      * {@code LoggerAI.track("job", "SendInvoices", () -> invoices.sendAll())} */
     public static <T> T track(String kind, String name, Callable<T> fn) throws Exception {
+        return track(kind, name, null, fn);
+    }
+
+    /** A job for a message another service published with {@link #traceHeaders(String)}: pass the
+     * message's headers so the job joins that trace and the service map shows who sent it.
+     * {@code LoggerAI.track("job", "order.created", headersOf(record), () -> handle(record))} */
+    public static <T> T track(String kind, String name, Map<String, String> headers, Callable<T> fn) throws Exception {
         Client c = client;
         if (c == null || !c.enabled || Unit.current() != null) return fn.call();
         String k = "command".equals(kind) ? "command" : "http".equals(kind) ? "http" : "job";
-        Unit u = new Unit(k, "command".equals(k) ? "CLI" : "JOB", null, null);
+        Map<String, String> h = new java.util.HashMap<>();
+        if (headers != null) headers.forEach((key, v) -> { if (key != null) h.put(key.toLowerCase(java.util.Locale.ROOT), v); });
+        Unit u = new Unit(k, "command".equals(k) ? "CLI" : "JOB", null, Unit.sessionFrom(h.get("x-loggerai-session")),
+                Unit.parentFrom(h.get("traceparent")), h.get("x-loggerai-caller"));
+        if (u.caller != null && "job".equals(k)) u.transport = "queue";
         u.route = name;
         Unit.set(u);
         int status = 200;
@@ -124,6 +135,22 @@ public final class LoggerAI {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    /** Headers that carry the current trace to another service: put them on a message you publish
+     * (Kafka, RabbitMQ, SQS). target names where it goes (a queue or topic), recorded as a step of
+     * the current request. Empty outside a request or when LoggerAI is off. */
+    public static Map<String, String> traceHeaders(String target) {
+        Client c = client;
+        Unit u = Unit.current();
+        if (c == null || !c.enabled || u == null || u.finished) return Map.of();
+        String sid = Unit.newSpanId();
+        if (target != null) u.dep(target.length() > 120 ? target.substring(0, 120) : target, "PUBLISH", 0, true, sid, "producer", 0);
+        Map<String, String> h = new java.util.LinkedHashMap<>();
+        h.put("traceparent", u.traceparent(sid));
+        h.put("x-loggerai-caller", c.service);
+        if (u.sessionId != null) h.put("x-loggerai-session", u.sessionId);
+        return h;
     }
 
     /** A log line of your own: DEBUG, INFO, WARNING, ERROR or CRITICAL. */

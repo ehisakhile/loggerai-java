@@ -33,7 +33,7 @@ public class LoggerAIFilter implements Filter {
             chain.doFilter(request, response);
             return;
         }
-        Unit unit = Hooks.start(req.getMethod(), req.getHeader("traceparent"), req.getHeader("x-loggerai-session"));
+        Unit unit = Hooks.start(req.getMethod(), req.getHeader("traceparent"), req.getHeader("x-loggerai-session"), req.getHeader("x-loggerai-caller"));
         Throwable failure = null;
         try {
             chain.doFilter(request, response);

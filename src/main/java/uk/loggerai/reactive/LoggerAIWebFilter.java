@@ -34,7 +34,8 @@ public class LoggerAIWebFilter implements WebFilter, Ordered {
         ServerHttpRequest req = exchange.getRequest();
         String path = req.getPath().pathWithinApplication().value();
         if (!LoggerAI.enabled() || Hooks.ignored(path)) return chain.filter(exchange);
-        Unit unit = Hooks.begin(req.getMethod().name(), req.getHeaders().getFirst("traceparent"), req.getHeaders().getFirst("x-loggerai-session"));
+        Unit unit = Hooks.begin(req.getMethod().name(), req.getHeaders().getFirst("traceparent"), req.getHeaders().getFirst("x-loggerai-session"),
+                req.getHeaders().getFirst("x-loggerai-caller"));
         exchange.getAttributes().put(ReactiveLoggerAI.KEY, unit);
         AtomicReference<Throwable> failure = new AtomicReference<>();
         return chain.filter(exchange)

@@ -30,6 +30,7 @@ public final class Options {
     List<String> appPackages = new ArrayList<>();
     final Map<String, Supplier<Object>> healthChecks = new LinkedHashMap<>();
     String root;
+    String propagate;
 
     public static Options fromEnvironment() {
         return new Options();
@@ -59,6 +60,9 @@ public final class Options {
     public Options healthCheck(String name, Supplier<Object> check) { healthChecks.put(name, check); return this; }
     public Options healthInterval(Duration v) { healthInterval = v; return this; }
     public Options hostInterval(Duration v) { hostInterval = v; return this; }
+    /** Which outgoing calls carry the trace and this service's name: the project's internal hosts by
+     * default; "all", "none", or extra hosts and patterns ("api.acme.io,*.acme.io"). Env: LOGGERAI_PROPAGATE. */
+    public Options propagate(String v) { propagate = v; return this; }
     /** The app's folder, for the disk it's on. Default: the working directory. */
     public Options root(String v) { root = v; return this; }
 }

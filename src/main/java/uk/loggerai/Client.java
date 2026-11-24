@@ -49,6 +49,7 @@ public final class Client {
     final String key;
     final String endpoint;
     final String service;
+    final java.util.function.Predicate<String> propagates;
     final String environment;
     final String release;
     volatile boolean enabled;
@@ -79,6 +80,7 @@ public final class Client {
         this.key = first(o.key, env("LOGGERAI_KEY"));
         this.endpoint = first(o.endpoint, env("LOGGERAI_ENDPOINT"), DEFAULT_ENDPOINT);
         this.service = first(o.service, env("LOGGERAI_SERVICE"), "app");
+        this.propagates = Propagation.rule(first(o.propagate, env("LOGGERAI_PROPAGATE")));
         this.environment = first(o.environment, env("LOGGERAI_ENVIRONMENT"), env("SPRING_PROFILES_ACTIVE"), "production");
         this.release = first(o.release, env("LOGGERAI_RELEASE"));
         boolean on = o.enabled != null ? o.enabled : truthy(first(env("LOGGERAI_ENABLED"), "true"));

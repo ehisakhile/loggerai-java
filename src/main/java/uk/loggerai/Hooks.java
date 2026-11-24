@@ -20,7 +20,12 @@ public final class Hooks {
 
     /** A request starts on this thread. */
     public static Unit start(String method, String traceparent, String session) {
-        Unit u = new Unit("http", method == null ? "GET" : method.toUpperCase(), Unit.traceFrom(traceparent), Unit.sessionFrom(session));
+        return start(method, traceparent, session, null);
+    }
+
+    /** A request starts on this thread; caller: the x-loggerai-caller header (another of the project's services). */
+    public static Unit start(String method, String traceparent, String session, String caller) {
+        Unit u = begin(method, traceparent, session, caller);
         Unit.set(u);
         return u;
     }
@@ -46,7 +51,34 @@ public final class Hooks {
 
     /** A request that isn't tied to this thread (reactive apps): started, but not set as current. */
     public static Unit begin(String method, String traceparent, String session) {
-        return new Unit("http", method == null ? "GET" : method.toUpperCase(), Unit.traceFrom(traceparent), Unit.sessionFrom(session));
+        return begin(method, traceparent, session, null);
+    }
+
+    public static Unit begin(String method, String traceparent, String session, String caller) {
+        return new Unit("http", method == null ? "GET" : method.toUpperCase(), null, Unit.sessionFrom(session), Unit.parentFrom(traceparent), caller);
+    }
+
+    public static String newSpanId() {
+        return Unit.newSpanId();
+    }
+
+    /** The headers that carry unit's trace to host, for the call with this span id; empty when the
+     * host isn't one of the project's own services (outside APIs get nothing). */
+    public static java.util.Map<String, String> carry(Unit unit, String host, String callSpanId) {
+        Client c = LoggerAI.client();
+        java.util.Map<String, String> h = new java.util.LinkedHashMap<>();
+        if (unit == null || c == null || !c.enabled || !c.propagates.test(host)) return h;
+        h.put("traceparent", unit.traceparent(callSpanId));
+        h.put("x-loggerai-caller", c.service);
+        if (unit.sessionId != null) h.put("x-loggerai-session", unit.sessionId);
+        return h;
+    }
+
+    /** A call to another service made for that request, with its own span id and status. */
+    public static void call(Unit unit, String target, String op, double ms, boolean ok, String callSpanId, int status) {
+        if (unit == null || unit.finished) return;
+        String o = op == null ? "?" : op.toUpperCase();
+        unit.dep(target == null ? "unknown" : target, o.length() > 20 ? o.substring(0, 20) : o, ms, ok, callSpanId, "client", status);
     }
 
     /** The error that failed a request, reported as soon as it's seen (before a framework logs it). */
